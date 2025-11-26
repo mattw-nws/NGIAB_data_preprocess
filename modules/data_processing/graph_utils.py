@@ -220,3 +220,55 @@ def get_upstream_ids(names: Union[str, List[str]], include_outlet: bool = True) 
             logger.error(f"feature {name} not found in the hydrofabric graph.")
 
     return parent_ids
+
+def get_neighbor_ids(names: Union[str, List[str]], include_outlet: bool = True, traverse_limit: int = 1) -> Set[str]:
+    """
+    Retrieves IDs of nearest nodes upstream of, and including, the given nodes in the hydrological network,
+    only up to traverse_limit next catchment(s).
+
+    Given one or more node names, this function identifies upstream neighbor nodes in the network,
+    adding only the immediate upstream source catchments.
+
+    Note that when include_outlet is True, traversal actually begins from the outlet nexus--thus sibling
+    nodes (and their parents, if traverse_limit is > 1) will be included.
+
+    Args:
+        names (Union[str, List[str]]): A single node name or a list of node names.
+        include_outlet (bool): Whether to include the input node itself in the results. Defaults to True.
+        traverse_limit (int): The maximum depth to traverse upstream. Defaults to 1.
+
+    Returns:
+        Set[str]: A set of node IDs (wb- and nex- prefixes) for upstream neighbors of the specified node(s). 
+                 INCLUDING THE INPUT NODES if include_outlet=True.
+    """
+    graph = get_graph()
+    if isinstance(names, str):
+        names = [names]
+    parent_ids = set()
+    for name in names:
+        graph_hops = 2*traverse_limit
+        if ("wb" in name or "cat" in name):
+            if include_outlet:
+                name = get_outlet_id(name)
+                graph_hops = 1+(2*(traverse_limit-1))
+
+        #NOTE: Can't do this optimization in this case, or we can lose parents where traversals overlap.
+        #TODO: Worth the cost to topologically sort first, so that we can skip if node is deeper than necessary? Probably not.
+        # if name in parent_ids: 
+        #     continue
+
+        try:
+            if "cat" in name:  # type: ignore # If name is None, this will raise an error, which is handled below
+                node_index = graph.vs.find(cat=name).index
+            else:
+                node_index = graph.vs.find(name=name).index
+            logger.info(f"{graph_hops=}")
+            upstream_nodes = graph.neighborhood(node_index, graph_hops, mode="IN")
+            for node in upstream_nodes:
+                parent_ids.add(graph.vs[node]["name"])
+        except KeyError:
+            logger.error(f"feature {name} not found in the hydrofabric graph.")
+        except ValueError:
+            logger.error(f"feature {name} not found in the hydrofabric graph.")
+
+    return parent_ids
