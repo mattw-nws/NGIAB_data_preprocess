@@ -234,6 +234,7 @@ def main() -> None:
                     features_to_subset,
                     output_gpkg_path=paths.geopackage_path,
                     include_outlet=include_outlet,
+                    traverse_limit=args.traverse_limit
                 )
                 logging.info("Subsetting complete.")
 

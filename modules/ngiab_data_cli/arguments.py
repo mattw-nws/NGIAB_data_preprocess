@@ -94,6 +94,12 @@ If exactly one argument is provided and the argument is an existing file, the fi
         help="Subset the hydrofabric to the given feature",
     )
     parser.add_argument(
+        "--traverse-limit",
+        type=int,
+        default=None,
+        help="Limit upstream traversal to this many catchments"
+    )
+    parser.add_argument(
         "-f",
         "--forcings",
         action="store_true",

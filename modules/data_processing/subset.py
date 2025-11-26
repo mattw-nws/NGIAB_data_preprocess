@@ -11,7 +11,7 @@ from data_processing.gpkg_utils import (
     subset_table_by_vpu,
     update_geopackage_metadata,
 )
-from data_processing.graph_utils import get_upstream_ids
+from data_processing.graph_utils import get_neighbor_ids, get_upstream_ids
 from rich.console import Console
 from rich.prompt import Prompt
 
@@ -99,9 +99,13 @@ def subset(
     output_gpkg_path: Path = Path(),
     include_outlet: bool = True,
     override_gpkg: bool = True,
+    traverse_limit: int | None = None
 ):
-    upstream_ids = list(get_upstream_ids(cat_ids, include_outlet))
-
+    if traverse_limit is None:
+        upstream_ids = list(get_upstream_ids(cat_ids, include_outlet))
+    else:
+        upstream_ids = list(get_neighbor_ids(cat_ids, include_outlet, traverse_limit=traverse_limit))
+    
     if not output_gpkg_path:
         # if the name isn't provided, use the first upstream id
         upstream_ids = sorted(upstream_ids)
