@@ -226,11 +226,11 @@ def get_neighbor_ids(names: Union[str, List[str]], include_outlet: bool = True, 
     Retrieves IDs of nearest nodes upstream of, and including, the given nodes in the hydrological network,
     only up to traverse_limit next catchment(s).
 
-    Given one or more node names, this function identifies upstream neighbor nodes in the network,
-    adding only the immediate upstream source catchments.
-
-    Note that when include_outlet is True, traversal actually begins from the outlet nexus--thus sibling
-    nodes (and their parents, if traverse_limit is > 1) will be included.
+    Note that when include_outlet is True, the outlet *and its parents up to traversal_limit catchments*
+    are included. That is, the outlet nexus(es) are considered part of the list of input nodes to traverse.
+    
+    For cat and wb nodes, up to traverse_limit upstream catchments are returned. For nex nodes, traversal also
+    stops at (and includes) traversal_limit catchments, *not* at (and does not include) traversal_limit nexuses.
 
     Args:
         names (Union[str, List[str]]): A single node name or a list of node names.
@@ -245,12 +245,17 @@ def get_neighbor_ids(names: Union[str, List[str]], include_outlet: bool = True, 
     if isinstance(names, str):
         names = [names]
     parent_ids = set()
-    for name in names:
+    while names:
+        name = names.pop()
         graph_hops = 2*traverse_limit
         if ("wb" in name or "cat" in name):
             if include_outlet:
-                name = get_outlet_id(name)
-                graph_hops = 1+(2*(traverse_limit-1))
+                outlet_name = get_outlet_id(name)
+                if outlet_name:
+                    names.append(outlet_name)
+        else:
+            # Change traversal pattern if starting at nex
+            graph_hops = 1+(2*(traverse_limit-1))
 
         #NOTE: Can't do this optimization in this case, or we can lose parents where traversals overlap.
         #TODO: Worth the cost to topologically sort first, so that we can skip if node is deeper than necessary? Probably not.
