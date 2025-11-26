@@ -104,7 +104,8 @@ class TestGetNeighborIds:
         logger.info("Testing get_neighbor_ids with traverse_limit=1, include_outlet=True")
         
         result = get_neighbor_ids("cat-485712", include_outlet=True, traverse_limit=1)
-        expected = {"nex-485713", "wb-485712", "wb-485880","wb-485887"}
+        expected = {"nex-485713", "wb-485712", "wb-485880","wb-485887",
+                    "wb-485881", "wb-485711", "nex-485712"}
         
         logger.info(f"Result: {result}")
         logger.info(f"Expected: {expected}")
@@ -122,7 +123,9 @@ class TestGetNeighborIds:
         result = get_neighbor_ids("cat-485712", include_outlet=True, traverse_limit=2)
         expected = {"nex-485713", "wb-485712", "wb-485880","wb-485887",
                     "nex-485712", "wb-485711", "wb-485881",
-                    "nex-485887", "wb-485888"}
+                    "nex-485887", "wb-485888",
+                    "nex-485711", "wb-485886", "wb-485710", "wb-485882",
+                    "nex-485881", "wb-485883"}
         
         logger.info(f"Result: {result}")
         logger.info(f"Expected: {expected}")
