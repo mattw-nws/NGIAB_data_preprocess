@@ -1,0 +1,3 @@
+cache_dir: ./outputs/copycat_cache
+start_time: {start_datetime}
+end_time: {end_datetime}

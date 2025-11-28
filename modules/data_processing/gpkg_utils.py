@@ -434,6 +434,24 @@ def get_table_crs(gpkg: str, table: str) -> str:
     return crs
 
 
+def get_cat_ids(gpkg: Path = FilePaths.conus_hydrofabric) -> list[str]:
+    """
+    Get all catchment ids in the GeoPackage.
+
+    Args:
+        gpkg (Path): The path to the GeoPackage.
+
+    Returns:
+        list[str]: The catchment ids present in the GeoPackage.
+
+    """
+    with sqlite3.connect(gpkg) as con:
+        sql_query = f"SELECT divide_id FROM 'divides'"
+        result = con.execute(sql_query).fetchall()
+
+    return [row[0] for row in result]
+
+
 def get_cat_from_gage_id(gage_id: str, gpkg: Path = FilePaths.conus_hydrofabric) -> str:
     """
     Get the catchment id associated with a gage id.
@@ -543,3 +561,15 @@ def get_cat_to_nhd_feature_id(gpkg: Path = FilePaths.conus_hydrofabric) -> Dict[
         mapping[cat] = int(feature)
 
     return mapping
+
+# def flag_external(cat_ids: set[str], gpkg: Path) -> None:
+#     """
+#     Update the type of provided catchments to "external". This may or may not be final, primarily aides in visualization of the subsetting result.
+#     """
+#     con = sqlite3.connect(gpkg)
+#     cursor = con.cursor()
+#     update_query = f"UPDATE divides SET type = 'external' WHERE divide_id IN ({','.join('?' * len(cat_ids))})"
+#     cursor.execute(update_query, (*cat_ids,))
+#     con.commit()
+
+#     con.close()

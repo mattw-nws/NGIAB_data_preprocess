@@ -100,6 +100,11 @@ If exactly one argument is provided and the argument is an existing file, the fi
         help="Limit upstream traversal to this many catchments"
     )
     parser.add_argument(
+        "--copycat",
+        action="store_true",
+        help="Use CopyCat for upstream contributions",
+    )
+    parser.add_argument(
         "-f",
         "--forcings",
         action="store_true",

@@ -171,7 +171,21 @@ def make_lstm_config(
                 )
             )
 
+def create_copycat_config(
+    config_dir: Path,
+    start_time: datetime,
+    end_time: datetime,
+) -> None:
+    with open(FilePaths.template_troute_config.parent/'copycat_config.yaml', "r") as file:
+        ccc_template = file.read()
+    filled_template = ccc_template.format(
+        start_datetime=start_time.strftime("%Y-%m-%d %H:%M:%S"),
+        end_datetime=end_time.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+    with open(config_dir / "copycat_config.yaml", "w") as file:
+        file.write(filled_template)
 
+    
 def configure_troute(
     cat_id: str, config_dir: Path, start_time: datetime, end_time: datetime
 ) -> None:
@@ -215,6 +229,45 @@ def configure_troute(
 
     with open(config_dir / "troute.yaml", "w") as file:
         file.write(filled_template)
+
+
+def make_copycat_realization_catchments(hydrofabric: Path, copycat_features):
+    cc_fragments = {}
+    if len(copycat_features) <= 0:
+        return cc_fragments
+
+    mapping = get_cat_to_nhd_feature_id()
+    divide_conf_df = get_model_attributes(hydrofabric)
+    for cat_id in copycat_features:
+        if cat_id not in mapping:
+            logging.error(f"No NWM ID found for {cat_id}! CopyCat will not be used!")
+            continue
+        conf_row = divide_conf_df[divide_conf_df['divide_id'] == cat_id]
+        #TODO: Use template?
+        cc_fragments[cat_id] = {
+            "formulations": [{
+                "name": "bmi_python",
+                "params": {
+                    "name": "bmi_python",
+                    "python_type": "copycatbmi.CopyCat",
+                    "model_type_name": "CopyCat",
+                    "model_params": {
+                        "feature_id": mapping[cat_id],
+                        "area": float(conf_row['areasqkm'].iloc[0]),
+                    },
+                    "uses_forcing_file": False,
+                    "init_config": "./config/copycat_config.yaml",
+                    "allow_exceed_end_time": True,
+                    "main_output_variable": "Q"
+                }
+            }],
+            "forcing": {
+                "path": "./forcings/forcings.nc",
+                "provider": "NetCDF",
+                "enable_cache": False
+            }
+        }
+    return cc_fragments
 
 
 def make_ngen_realization_json(

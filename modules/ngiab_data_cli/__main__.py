@@ -12,7 +12,7 @@ with rich.status.Status("loading") as status:
     from pathlib import Path
 
     import geopandas as gpd
-    from data_processing.create_realization import create_lstm_realization, create_realization
+    from data_processing.create_realization import create_lstm_realization, create_realization, create_copycat_config, make_copycat_realization_catchments
     from data_processing.dask_utils import shutdown_cluster
     from data_processing.dataset_utils import save_and_clip_dataset
     from data_processing.datasets import load_aorc_zarr, load_v3_retrospective_zarr
@@ -21,7 +21,7 @@ with rich.status.Status("loading") as status:
     from shapely.ops import transform
     import pyproj
     from data_processing.forcings import create_forcings
-    from data_processing.gpkg_utils import get_cat_from_gage_id, get_catid_from_point
+    from data_processing.gpkg_utils import get_cat_from_gage_id, get_catid_from_point, get_cat_ids
     from data_processing.graph_utils import get_upstream_cats
     from data_processing.subset import subset, subset_vpu
     from data_sources.source_validation import validate_hydrofabric, validate_output_dir
@@ -209,6 +209,7 @@ def main() -> None:
 
         paths = FilePaths(output_folder)
         args = set_dependent_flags(args, paths)  # --validate
+        catchment_fragments = {}
         if features_to_subset:
             logging.info(f"Processing {len(features_to_subset)} features in {paths.output_dir}")
             if not args.vpu:
@@ -221,9 +222,15 @@ def main() -> None:
                     return
 
         if args.subset:
+            if args.copycat:
+                if args.traverse_limit is not None and args.traverse_limit > 1:
+                    logging.warning(f"When using --copycat, --traverse_limit must be 1 (was {args.traverse_limit}), overriding!") 
+                args.traverse_limit = 1
+
             if args.vpu:
                 logging.info(f"Subsetting VPU {args.vpu}")
                 subset_vpu(args.vpu, output_gpkg_path=paths.geopackage_path)
+                #TODO: if vpu and copycat, get next upstream neighbors?
                 logging.info("Subsetting complete.")
             else:
                 logging.info("Subsetting hydrofabric")
@@ -237,9 +244,20 @@ def main() -> None:
                     traverse_limit=args.traverse_limit
                 )
                 logging.info("Subsetting complete.")
+            #TODO: Effectively, to use CopyCat, you must subset... fix or validate/document?
+            if args.copycat:
+                copycat_features = set(get_cat_ids(paths.geopackage_path)).difference(features_to_subset)
+                logging.debug(f"{copycat_features=}")
+                if len(copycat_features) == 0:
+                    logging.warning(f"CopyCat was requested but no external catchments were found.")
+                # flag_external(copycat_features, paths.geopackage_path)
+                catchment_fragments = make_copycat_realization_catchments(paths.geopackage_path, copycat_features)
+
 
         if args.forcings:
             logging.info(f"Generating forcings from {args.start_date} to {args.end_date}...")
+            #TODO: CopyCat catchments do not need forcing data, though ngen will probably complain
+            # if no forcing is found...but it could be zeros, which may save time...short-circut?
             if args.source == "aorc":
                 data = load_aorc_zarr(args.start_date.year, args.end_date.year)
             elif args.source == "nwm":
@@ -268,6 +286,7 @@ def main() -> None:
                     start_time=args.start_date,
                     end_time=args.end_date,
                     use_rust=args.lstm_rust,
+                    catchment_fragments=catchment_fragments,
                 )
             else:
                 create_realization(
@@ -276,7 +295,10 @@ def main() -> None:
                     end_time=args.end_date,
                     use_nwm_gw=args.nwm_gw,
                     gage_id=gage_id,
+                    catchment_fragments=catchment_fragments,
                 )
+            if args.copycat:
+                create_copycat_config(paths.config_dir, args.start_date, args.end_date)
             logging.info("Realization creation complete.")
 
         if args.run:
