@@ -106,6 +106,11 @@ If exactly one argument is provided and the argument is an existing file, the fi
         help="Use CopyCat for upstream contributions",
     )
     parser.add_argument(
+        "--t-route-warmer",
+        action="store_true",
+        help="Create T-Route warm-start file",
+    )
+    parser.add_argument(
         "-f",
         "--forcings",
         action="store_true",

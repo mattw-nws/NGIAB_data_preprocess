@@ -24,6 +24,7 @@ with rich.status.Status("loading") as status:
     from data_processing.gpkg_utils import get_cat_from_gage_id, get_catid_from_point, get_cat_ids
     from data_processing.graph_utils import get_upstream_cats
     from data_processing.subset import subset, subset_vpu
+    from data_processing.copycat import copycat_make_channel_restart_file
     from data_sources.source_validation import validate_hydrofabric, validate_output_dir
     from ngiab_data_cli.arguments import parse_arguments
     from ngiab_data_cli.custom_logging import set_logging_to_critical_only, setup_logging
@@ -300,6 +301,12 @@ def main() -> None:
             if args.copycat:
                 create_copycat_config(paths.config_dir, args.start_date, args.end_date)
             logging.info("Realization creation complete.")
+
+        if args.t_route_warmer:
+            # This isn't really forcing, and we want to be able to create a warm-start file without
+            # spending the cycles on the more general zonal statistics for forcing--so it's here
+            # as its own argument/processing section independent of s/f/r options
+            copycat_make_channel_restart_file(paths.config_dir, paths.geopackage_path, paths.forcings_dir, args.start_date)
 
         if args.run:
             logging.info("Running Next Gen using NGIAB...")
