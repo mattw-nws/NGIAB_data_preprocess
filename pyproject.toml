@@ -43,7 +43,7 @@ dependencies = [
     "netCDF4>=1.6.5,<1.7.3",
     "dask==2024.4.1",
     "dask[distributed]==2024.4.1",
-    "exactextract==0.2.0",
+    "exactextract==0.2.2",
     "numpy>=1.26.4",
     "tqdm==4.66.4",
     "rich==13.7.1",
