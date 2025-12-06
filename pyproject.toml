@@ -57,7 +57,7 @@ dependencies = [
 [project.optional-dependencies]
 eval = ["ngiab_eval"]
 plot = ["ngiab_eval[plot]"]
-copycatbmi = ["copycatbmi@git+https://github.com/mattw-nws/CopyCat.git@v0.0.5"]
+copycatbmi = ["copycatbmi@git+https://github.com/mattw-nws/CopyCat.git@v0.0.6"]
 
 [project.urls]
 Homepage = "https://github.com/CIROH-UA/NGIAB_data_preprocess"
