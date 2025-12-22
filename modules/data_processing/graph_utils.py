@@ -244,15 +244,19 @@ def get_neighbor_ids(names: Union[str, List[str]], include_outlet: bool = True, 
     graph = get_graph()
     if isinstance(names, str):
         names = [names]
+    names_queue = names.copy()
     parent_ids = set()
-    while names:
-        name = names.pop()
+    while names_queue:
+        name = names_queue.pop()
         graph_hops = 2*traverse_limit
         if ("wb" in name or "cat" in name):
             if include_outlet:
-                outlet_name = get_outlet_id(name)
-                if outlet_name:
-                    names.append(outlet_name)
+                try:
+                    outlet_name = get_outlet_id(name)
+                    if outlet_name:
+                        names_queue.append(outlet_name)
+                except ValueError as e:
+                    logger.info("Got catchment with no waterbody {name} - no further traversal.")
         else:
             # Change traversal pattern if starting at nex
             graph_hops = 1+(2*(traverse_limit-1))
@@ -267,7 +271,7 @@ def get_neighbor_ids(names: Union[str, List[str]], include_outlet: bool = True, 
                 node_index = graph.vs.find(cat=name).index
             else:
                 node_index = graph.vs.find(name=name).index
-            logger.info(f"{graph_hops=}")
+            #logger.info(f"{graph_hops=}")
             upstream_nodes = graph.neighborhood(node_index, graph_hops, mode="IN")
             for node in upstream_nodes:
                 parent_ids.add(graph.vs[node]["name"])
