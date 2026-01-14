@@ -22,7 +22,7 @@ with rich.status.Status("loading") as status:
     import pyproj
     from data_processing.forcings import create_forcings
     from data_processing.gpkg_utils import get_cat_from_gage_id, get_catid_from_point, get_cat_ids
-    from data_processing.graph_utils import get_upstream_cats
+    from data_processing.graph_utils import get_upstream_cats, get_neighbor_ids
     from data_processing.subset import subset, subset_vpu
     from data_processing.copycat import copycat_make_channel_restart_file
     from data_sources.source_validation import validate_hydrofabric, validate_output_dir
@@ -214,13 +214,25 @@ def main() -> None:
         if features_to_subset:
             logging.info(f"Processing {len(features_to_subset)} features in {paths.output_dir}")
             if not args.vpu:
-                upstream_count = len(get_upstream_cats(features_to_subset))
-                logging.info(f"Upstream catchments: {upstream_count}")
-                if upstream_count == 0:
-                    # if there are no upstreams, exit
-                    #TODO: This bails if *all* had no hits... fail if *any* have none?
-                    logging.error(f"No upstream catchments found for {features_to_subset}.")
-                    return
+                if args.traverse_limit is None:
+                    upstream_count = len(get_upstream_cats(features_to_subset))
+                    logging.info(f"Upstream catchments: {upstream_count}")
+                    if upstream_count == 0:
+                        # if there are no upstreams, exit
+                        #TODO: This bails if *all* had no hits... fail if *any* have none?
+                        logging.error(f"No upstream catchments found for {features_to_subset}.")
+                        return
+                else:
+                    # Just ensure that some features are found...
+                    upstream_count = 0
+                    while upstream_count == 0:
+                        upstream_count = len(get_neighbor_ids(features_to_subset, include_outlet=True, traverse_limit=args.traverse_limit))
+                    if upstream_count == 0:
+                        # if there are no upstreams, exit
+                        logging.error(f"No catchments found for {features_to_subset}.")
+                        return
+                        #TODO: This bails if *all* had no hits... fail if *any* have none?
+                    logging.info(f"Subsetting selection validates (at least some present in hydrofabric). Proceeding...")
 
         if args.subset:
             if args.copycat:

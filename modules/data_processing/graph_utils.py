@@ -1,8 +1,11 @@
 import logging
 import sqlite3
 from functools import cache
+from functools import partial
 from pathlib import Path
 from typing import List, Optional, Set, Union
+
+import concurrent
 
 import igraph as ig
 from data_processing.file_paths import FilePaths
@@ -221,6 +224,48 @@ def get_upstream_ids(names: Union[str, List[str]], include_outlet: bool = True) 
 
     return parent_ids
 
+
+POOL_GRAPH = None
+
+def _get_neighbor_ids_worker(name: str, include_outlet: bool, traverse_limit: int) -> tuple:
+    """Worker function for multiprocessing in get_neighbor_ids."""
+    global POOL_GRAPH
+    parent_ids = set()
+    new_names = set()
+    graph_hops = 2*traverse_limit
+    if ("wb" in name or "cat" in name):
+        if include_outlet:
+            try:
+                outlet_name = get_outlet_id(name)
+                if outlet_name:
+                    new_names.add(outlet_name)
+            except ValueError as e:
+                logger.info("Got catchment with no waterbody {name} - no further traversal.")
+    else:
+        # Change traversal pattern if starting at nex
+        graph_hops = 1+(2*(traverse_limit-1))
+
+    try:
+        if "cat" in name:  # type: ignore # If name is None, this will raise an error, which is handled below
+            node_index = POOL_GRAPH.vs.find(cat=name).index
+        else:
+            node_index = POOL_GRAPH.vs.find(name=name).index
+        upstream_nodes = POOL_GRAPH.neighborhood(node_index, graph_hops, mode="IN")
+        for node in upstream_nodes:
+            parent_ids.add(POOL_GRAPH.vs[node]["name"])
+    except KeyError:
+        logger.error(f"feature {name} not found in the hydrofabric graph.")
+    except ValueError:
+        logger.error(f"feature {name} not found in the hydrofabric graph.")
+    return parent_ids, new_names
+
+
+def _graph_initializer():
+    """Initializer function for ProcessPoolExecutor worker processes."""
+    global POOL_GRAPH
+    POOL_GRAPH = get_graph()
+
+
 def get_neighbor_ids(names: Union[str, List[str]], include_outlet: bool = True, traverse_limit: int = 1) -> Set[str]:
     """
     Retrieves IDs of nearest nodes upstream of, and including, the given nodes in the hydrological network,
@@ -241,43 +286,26 @@ def get_neighbor_ids(names: Union[str, List[str]], include_outlet: bool = True, 
         Set[str]: A set of node IDs (wb- and nex- prefixes) for upstream neighbors of the specified node(s). 
                  INCLUDING THE INPUT NODES if include_outlet=True.
     """
+    global POOL_GRAPH
     graph = get_graph()
+    POOL_GRAPH = graph # Only works in non-multiprocessing contexts!
     if isinstance(names, str):
         names = [names]
     names_queue = names.copy()
     parent_ids = set()
+    
+    partial_f = partial(_get_neighbor_ids_worker, include_outlet=include_outlet, traverse_limit=traverse_limit)
+
     while names_queue:
-        name = names_queue.pop()
-        graph_hops = 2*traverse_limit
-        if ("wb" in name or "cat" in name):
-            if include_outlet:
-                try:
-                    outlet_name = get_outlet_id(name)
-                    if outlet_name:
-                        names_queue.append(outlet_name)
-                except ValueError as e:
-                    logger.info("Got catchment with no waterbody {name} - no further traversal.")
-        else:
-            # Change traversal pattern if starting at nex
-            graph_hops = 1+(2*(traverse_limit-1))
-
-        #NOTE: Can't do this optimization in this case, or we can lose parents where traversals overlap.
-        #TODO: Worth the cost to topologically sort first, so that we can skip if node is deeper than necessary? Probably not.
-        # if name in parent_ids: 
-        #     continue
-
-        try:
-            if "cat" in name:  # type: ignore # If name is None, this will raise an error, which is handled below
-                node_index = graph.vs.find(cat=name).index
-            else:
-                node_index = graph.vs.find(name=name).index
-            #logger.info(f"{graph_hops=}")
-            upstream_nodes = graph.neighborhood(node_index, graph_hops, mode="IN")
-            for node in upstream_nodes:
-                parent_ids.add(graph.vs[node]["name"])
-        except KeyError:
-            logger.error(f"feature {name} not found in the hydrofabric graph.")
-        except ValueError:
-            logger.error(f"feature {name} not found in the hydrofabric graph.")
+        with concurrent.futures.ProcessPoolExecutor(initializer=_graph_initializer) as executor:
+            result_tuples = executor.map(partial_f, names_queue)
+            parent_ids_sets, new_names_sets = zip(*result_tuples)
+            # Combine all found parent_ids
+            for pids in parent_ids_sets:
+                parent_ids.update(pids)
+            # Prepare next names_queue
+            names_queue = []
+            for nms in new_names_sets:
+                names_queue.extend(nms)
 
     return parent_ids
